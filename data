@@ -1,5 +1,6 @@
 # this example comes from the following page for the testing purpose:
 #https://www.codeproject.com/Articles/318126/Naive-Bayes-Classifier
+#it has 8 data points (the first 8 ones), i.e the rest are just copied (and modified) for testing purpose
 m 6 180 12
 m 5.92 190 11
 m 5.58 170 12
@@ -8,3 +9,11 @@ f 5 100 6
 f 5.5 150 8
 f 5.42 130 7
 f 5.75 150 9
+m 6 180 12
+m 5.92 190 11
+m 5.58 170 12
+m 5.92 165 10
+f 5 100 6
+f 5.5 150 8
+f 5.42 130 7
+m 5.75 150 9
