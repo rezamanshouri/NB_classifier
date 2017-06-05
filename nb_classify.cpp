@@ -22,7 +22,7 @@ vector<string> split(const string &s, char delim);
 void read_data_from_file(const char* file_name, vector<pair<int,vector<double> > >& data);
 template <typename Iterator>
 void prepare_paramters_for_calculations(
-                        Iterator start, Iterator end,
+                        Iterator start, Iterator end,  int btsi, int tss,
                         map<int,vector<vector<double> > >& training_data_summary,
                         map<int,int>&,
                         map<int,vector<double> >&,
@@ -51,6 +51,9 @@ double calculate_accuracy_of_test_set(
                                      map<int,vector<double> >& means,
                                      map<int,vector<double> >& variances);
 
+void calculate_confidence_interval(vector<double> errors_in_k_fold_CV, double& mean, double& range);
+
+
 
 
 int main(int argc, const char* argv[]){
@@ -63,7 +66,7 @@ int main(int argc, const char* argv[]){
     // Verbose
     int verbose = 0;
 
-    if(argc < 3){
+    if(argc < 2){
         usage(argv[0]);
         return(1);
     }else{
@@ -103,53 +106,86 @@ int main(int argc, const char* argv[]){
 
 
     vector<pair<int,vector<double> > > all_data;
+    read_data_from_file(argv[argc-1], all_data);
     //random_shuffle (all_data.begin(), all_data.end());
-    //vector<pair<int,vector<double> > > training_data = all_data;
-    //vector<pair<int,vector<double> > > test_data = all_data;
 
-    unsigned int total_number_of_examples = 0;
-    map<int,vector<vector<double> > > training_data_summary;
-    map<int,int> label_counts;
-    map<int,double> priors;
-    map<int,vector<double> > multinomial_likelihoods;
-    map<int,int> multinomial_sums;
-    map<int,vector<double> > sum_feature_values_per_label; //used to calculate mean for features per label
-    map<int,vector<double> > means;
-    map<int,vector<double> > variances;
-
-    //here I use iterator because I don't want to paye the cost of partitioning data into training and test sets
-    read_data_from_file(argv[argc-2], all_data);
-    prepare_paramters_for_calculations(
-                        all_data.begin(), all_data.begin()+7,
-                        training_data_summary,
-                        multinomial_sums,
-                        sum_feature_values_per_label,
-                        label_counts,
-                        total_number_of_examples);
-
-    calculate_mean_variance_multinomialSums(
-                                            total_number_of_examples,
-                                            training_data_summary,
-                                            label_counts,
-                                            priors,
-                                            multinomial_likelihoods,
-                                            multinomial_sums,
-                                            sum_feature_values_per_label,
-                                            means,
-                                            variances,
-                                            alpha);
-
-    double accuracy = calculate_accuracy_of_test_set(
-                                   verbose,
-                                   all_data.begin()+8, all_data.end(),
-                                   decision,
-                                   priors,
-                                   multinomial_likelihoods,
-                                   means,
-                                   variances);
+    //k fold cross validation
+    int k = 4; // k-fold cross validation
+    int num_examples = all_data.size();
+    int tss = num_examples/k; // test set size, i.e. a window which will be slided to the right in k-fold cross validation to determin where the test is.
+    vector<double> errors_in_k_fold_CV;
+    for (int i = 0; i < k; i++) {
+        int btsi = i*tss; //begin_test_set_index
 
 
-    cout << accuracy << endl;
+        //begin training on this fold
+        unsigned int total_number_of_examples = 0;
+        map<int,vector<vector<double> > > training_data_summary;
+        map<int,int> label_counts;
+        map<int,double> priors;
+        map<int,vector<double> > multinomial_likelihoods;
+        map<int,int> multinomial_sums;
+        map<int,vector<double> > sum_feature_values_per_label; //used to calculate mean for features per label
+        map<int,vector<double> > means;
+        map<int,vector<double> > variances;
+
+        prepare_paramters_for_calculations(
+                            all_data.begin(), all_data.end(), btsi, tss,
+                            training_data_summary,
+                            multinomial_sums,
+                            sum_feature_values_per_label,
+                            label_counts,
+                            total_number_of_examples);
+
+        //here I use iterator because I don't want to paye the cost of partitioning data into training and test sets
+        calculate_mean_variance_multinomialSums(
+                                                total_number_of_examples,
+                                                training_data_summary,
+                                                label_counts,
+                                                priors,
+                                                multinomial_likelihoods,
+                                                multinomial_sums,
+                                                sum_feature_values_per_label,
+                                                means,
+                                                variances,
+                                                alpha);
+
+        //calculate accuracy of this fold
+        double accuracy = calculate_accuracy_of_test_set(
+                                       verbose,
+                                       all_data.begin()+btsi, all_data.begin()+(btsi+tss),
+                                       decision,
+                                       priors,
+                                       multinomial_likelihoods,
+                                       means,
+                                       variances);
+
+
+        errors_in_k_fold_CV.push_back(1-accuracy);
+
+        /*
+        training_data_summary.clear();
+        label_counts.clear();
+        priors.clear();
+        multinomial_likelihoods.clear();
+        multinomial_sums.clear();
+        sum_feature_values_per_label.clear();
+        means.clear();
+        variances.clear();
+        */
+
+
+        cout << "------------------------------\n";
+
+      }
+
+
+      //calculate confidence interval
+      double mean = 0.0;
+      double range = 0.0;
+      calculate_confidence_interval(errors_in_k_fold_CV, mean, range);
+      cout << "CI : " << mean << "+_ " << range << endl;
+      cout << "(" << mean-range << "," << mean+range << ")" << endl;
 
 
 
@@ -229,17 +265,24 @@ void read_data_from_file(const char* file_name, vector<pair<int,vector<double> >
 
 
 //some pre-calculations so that we can easily calculate parameters in naive bayes
+//Iterators: start and end are the begining and end of all data; btsi and etsi are the begin and end index for test set,thus we iterate from begining till btsi, and then from etsi+1 till end.
 template <typename Iterator>
 void prepare_paramters_for_calculations(
-                         Iterator start, Iterator end,
+                         Iterator start, Iterator end,  int btsi, int tss,
                          map<int,vector<vector<double> > >& training_data,
                          map<int,int>& multinomial_sums,
                          map<int,vector<double> >& sum_feature_values_per_label,
                          map<int,int>& label_counts,
                          unsigned int& total_number_of_examples) {
 
-      //for (const auto& row : all_data) {
+      int counter = 0;
       for (Iterator row = start; row !=end; ++row) {
+          //ignore test set
+          if(counter == btsi) {
+            row += tss-1 ;  //this should be "tss+1", but I have to handle boundaries (fix later)
+          }
+          counter ++;
+
           int label = (*row).first;
           for(unsigned int i = 0; i < (*row).second.size(); i++){  //extract feature i's value for this row
               if(sum_feature_values_per_label.find(label) == sum_feature_values_per_label.end()){ // if this label has not been seen
@@ -416,5 +459,34 @@ double calculate_accuracy_of_test_set(
        double accuracy = ((double)correct/total);
        printf ("Accuracy: %3.2f %% (%i/%i)\n", (100*accuracy),correct,total);
        return accuracy;
+
+}
+
+
+//paramert "range" will be (2.23 * SE) where 2.23 comes from 95% CI and k = 10
+void calculate_confidence_interval(vector<double> errors_in_k_fold_CV, double& mean, double& range) {
+
+    int k = errors_in_k_fold_CV.size();
+
+    //calculate average error
+    double average_error = 0;
+    for(auto i : errors_in_k_fold_CV) {
+      average_error += i;
+    }
+    average_error /= k;
+    mean = average_error;
+
+    //calulate variance of errors
+    double variance = 0;
+    for(auto i : errors_in_k_fold_CV) {
+      variance += (i - average_error)*(i - average_error);
+    }
+    variance /= (k-1);
+
+    //calculate standard error
+    double standard_deviation_of_errors = sqrt(variance);  // describes the spread of values in the sample (i.e. errors here)
+    double standard_error =  standard_deviation_of_errors / sqrt(k);   //This is the standard deviation of the sample mean, xBar, and describes its accuracy as an estimate of the population mean, mu.
+
+    range = 2.23 * standard_error;
 
 }
