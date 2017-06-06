@@ -12,6 +12,7 @@
 #include <sstream>
 #include <map>
 #include <algorithm>
+#include <iomanip>
 //#include <random>
 
 using namespace std;
@@ -30,6 +31,7 @@ void prepare_paramters_for_calculations(
                         unsigned int&);
 
 void calculate_mean_variance_multinomialSums(
+                                        int verbose,
                                         unsigned int& total_number_of_examples,
                                         map<int,vector<vector<double> > >& training_data_summary,
                                         map<int,int>& label_counts,
@@ -66,6 +68,9 @@ int main(int argc, const char* argv[]){
     // Verbose
     int verbose = 0;
 
+    // K in k-fold CV
+    int k = 10;
+
     if(argc < 2){
         usage(argv[0]);
         return(1);
@@ -78,6 +83,9 @@ int main(int argc, const char* argv[]){
             }
             if(string(argv[i]) == "-a" && i < argc-1){
                 alpha = atof(argv[i+1]);
+            }
+            if(string(argv[i]) == "-k"){
+                k = atoi(argv[i+1]);
             }
             if(string(argv[i]) == "-v"){
                 verbose = 1;
@@ -100,22 +108,28 @@ int main(int argc, const char* argv[]){
             cout << "# decision rule: gaussian" << endl;
             break;
     }
+    cout << "# K in K-fold CV:   " << k << endl;
     cout << "# alpha param:   " << alpha << endl;
-    cout << "# training data: " << argv[argc-2] << endl;
-    cout << "# test data:     " << argv[argc-1] << endl;
+    cout << "# training data: " << argv[argc-1] << endl << endl;
+
+
+    //set precision for doubles in cout in the "whole" program
+    //std::cout << std::fixed;
+    //std::cout << std::setprecision(3);
 
 
     vector<pair<int,vector<double> > > all_data;
     read_data_from_file(argv[argc-1], all_data);
-    //random_shuffle (all_data.begin(), all_data.end());
+    random_shuffle (all_data.begin(), all_data.end());
 
     //k fold cross validation
-    int k = 4; // k-fold cross validation
     int num_examples = all_data.size();
     int tss = num_examples/k; // test set size, i.e. a window which will be slided to the right in k-fold cross validation to determin where the test is.
     vector<double> errors_in_k_fold_CV;
     for (int i = 0; i < k; i++) {
+        if(verbose) cout << "------------ fold " << i+1  << " ------------------" << endl;
         int btsi = i*tss; //begin_test_set_index
+        if(verbose) cout << "examples in test set: " << btsi << "-" << btsi+tss << endl;
 
 
         //begin training on this fold
@@ -139,6 +153,7 @@ int main(int argc, const char* argv[]){
 
         //here I use iterator because I don't want to paye the cost of partitioning data into training and test sets
         calculate_mean_variance_multinomialSums(
+                                                verbose,
                                                 total_number_of_examples,
                                                 training_data_summary,
                                                 label_counts,
@@ -175,7 +190,6 @@ int main(int argc, const char* argv[]){
         */
 
 
-        cout << "------------------------------\n";
 
       }
 
@@ -184,7 +198,7 @@ int main(int argc, const char* argv[]){
       double mean = 0.0;
       double range = 0.0;
       calculate_confidence_interval(errors_in_k_fold_CV, mean, range);
-      cout << "CI : " << mean << "+_ " << range << endl;
+      cout << "\n\nCI for errors: \ncenter:" << mean << "\nrange: " << range << endl;
       cout << "(" << mean-range << "," << mean+range << ")" << endl;
 
 
@@ -197,11 +211,12 @@ int main(int argc, const char* argv[]){
 
 void usage(const char* prog){
 
-   cout << "Read training data then classify test data using naive Bayes:\nUsage:\n" << prog << " [options] training_set test_data" << endl << endl;
+   cout << "Read training data then perform cross validation using naive Bayes classifier:\nUsage:\n" << prog << " [options] training_set" << endl << endl;
    cout << "Options:" << endl;
    cout << "-d <int> Decsion rule. 1 = gaussian (default)" << endl;
    cout << "                       2 = multinomial" << endl;
    cout << "                       3 = bernoulli" << endl;
+   cout << "-k       K in K-fold Cross Validation, default 10." << endl;
    cout << "-a       Smoothing parameter alpha. default 1.0 (Laplace)" << endl;
    cout << "-v       Verbose." << endl << endl;
 }
@@ -304,6 +319,7 @@ void prepare_paramters_for_calculations(
 
 //parameter "data" passed here is actually "training_data"
 void calculate_mean_variance_multinomialSums(
+                                        int verbose,
                                         unsigned int& total_number_of_examples,
                                         map<int,vector<vector<double> > >& data,
                                         map<int,int>& label_counts,
@@ -319,14 +335,15 @@ void calculate_mean_variance_multinomialSums(
 
         priors[it->first] = (double)label_counts[it->first]/total_number_of_examples;
 
-
-        if(it->first > 0){
+        if(verbose) {
+          if(it->first > 0){
+              cout << "class " << char(it->first) << ", prior: " << priors[it->first] << endl;
+          }else{
             cout << "class " << char(it->first) << ", prior: " << priors[it->first] << endl;
-        }else{
-          cout << "class " << char(it->first) << ", prior: " << priors[it->first] << endl;
-            //printf ("class %i prior: %1.3f\n",it->first,priors[it->first]);
+              //printf ("class %i prior: %1.3f\n",it->first,priors[it->first]);
+          }
+          cout << "feature\tmean\tvar\tstddev\tmnl" << endl;
         }
-        cout << "feature\tmean\tvar\tstddev\tmnl" << endl;
 
 
         // Calculate means
@@ -355,10 +372,11 @@ void calculate_mean_variance_multinomialSums(
             multinomial_likelihoods[it->first].push_back(mnl);
         }
 
-
-        for(unsigned int i = 0; i < feature_means.size(); i++){
-            printf("%i\t%2.3f\t%2.3f\t%2.3f\t%2.3f\n",i+1,feature_means[i],feature_variances[i],sqrt(feature_variances[i]),multinomial_likelihoods[it->first][i]);
-            //cout << feature_means[i] << "\t" << sqrt(feature_variances[i]) << endl;
+        if(verbose) {
+          for(unsigned int i = 0; i < feature_means.size(); i++){
+              printf("%i\t%2.3f\t%2.3f\t%2.3f\t%2.3f\n",i+1,feature_means[i],feature_variances[i],sqrt(feature_variances[i]),multinomial_likelihoods[it->first][i]);
+              //cout << feature_means[i] << "\t" << sqrt(feature_variances[i]) << endl;
+          }
         }
 
         means[it->first] = feature_means;
@@ -382,8 +400,8 @@ double calculate_accuracy_of_test_set(
                                      map<int,vector<double> >& variances){
 
        // Classify
-       cout << "Classifying:" << endl;
-       if(verbose) cout << "class\tprob\tresult" << endl;
+       if(verbose) cout << "\nClassifying:" << endl;
+       if(verbose) cout << "class\tprediction\tresult" << endl;
        int correct = 0;
        int total = 0;
 
@@ -394,7 +412,7 @@ double calculate_accuracy_of_test_set(
 
              int predlabel = 0;
              double maxlikelihood = 0.0;
-             double denom = 0.0;
+             //double denom = 0.0;
              vector<double> probs;
              for(auto it = priors.begin(); it != priors.end(); it++){
                  double numer = priors[it->first];
@@ -418,38 +436,34 @@ double calculate_accuracy_of_test_set(
                  }
 
                  if(verbose){
-                     if(it->first > 0){
-                         cout << "+" << it->first << ":" << numer << endl;
-                     }else{
-                         cout << it->first << ":" << numer << endl;
-                     }
+                     char pred_l = char(it->first);
+                     cout << pred_l << ":" << numer << endl;
                  }
 
                  if(numer > maxlikelihood){
                      maxlikelihood = numer;
                      predlabel = it->first;
                  }
-                 denom += numer;
+                 //denom += numer;
                  probs.push_back(numer);
              }
              //for(unsigned int j = 0; j < probs.size(); j++){
              //    cout << probs[j]/denom << " ";
              //}
 
+
              if(verbose){
-                 if(predlabel > 0){
-                     printf ("+%i\t%1.3f\t", predlabel,(maxlikelihood/denom));
-                 }else{
-                     printf ("%i\t%1.3f\t", predlabel,(maxlikelihood/denom));
-                 }
+               char pred_l = char(predlabel);
+               char lbl = char(label);
+               cout << lbl << "\t" << pred_l << "\t";
              }
 
 
              if(predlabel == label){
-                 if(verbose) cout << "correct" << endl;
+                 if(verbose) cout << "\tcorrect" << endl << endl;
                  correct++;
              }else{
-                 if(verbose) cout << "incorrect" << endl;
+                 if(verbose) cout << "\tincorrect" << endl << endl;
              }
 
              total++;
@@ -463,7 +477,7 @@ double calculate_accuracy_of_test_set(
 }
 
 
-//paramert "range" will be (2.23 * SE) where 2.23 comes from 95% CI and k = 10
+//paramert "range" will be (2.262 * SE) where 2.262 comes from 95% CI and k = 10
 void calculate_confidence_interval(vector<double> errors_in_k_fold_CV, double& mean, double& range) {
 
     int k = errors_in_k_fold_CV.size();
@@ -487,6 +501,7 @@ void calculate_confidence_interval(vector<double> errors_in_k_fold_CV, double& m
     double standard_deviation_of_errors = sqrt(variance);  // describes the spread of values in the sample (i.e. errors here)
     double standard_error =  standard_deviation_of_errors / sqrt(k);   //This is the standard deviation of the sample mean, xBar, and describes its accuracy as an estimate of the population mean, mu.
 
-    range = 2.23 * standard_error;
+    //when k=10 and we want 95% CI, 2.262
+    range = 2.262 * standard_error;
 
 }
