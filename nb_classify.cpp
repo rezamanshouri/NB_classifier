@@ -13,6 +13,7 @@
 #include <map>
 #include <algorithm>
 #include <iomanip>
+#include <float.h>
 //#include <random>
 
 using namespace std;
@@ -344,7 +345,7 @@ void calculate_mean_variance_multinomialSums(
             cout << "class " << char(it->first) << ", prior: " << priors[it->first] << endl;
               //printf ("class %i prior: %1.3f\n",it->first,priors[it->first]);
           }
-          cout << "feature\tmean\tvar\tstddev\tmnl" << endl;
+          cout << "feature\tmean\tvar\tstddev" << endl;
         }
 
 
@@ -376,7 +377,7 @@ void calculate_mean_variance_multinomialSums(
 
         if(verbose) {
           for(unsigned int i = 0; i < feature_means.size(); i++){
-              printf("%i\t%2.3f\t%2.3f\t%2.3f\t%2.3f\n",i+1,feature_means[i],feature_variances[i],sqrt(feature_variances[i]),multinomial_likelihoods[it->first][i]);
+              printf("%i\t%2.3f\t%2.3f\t%2.3f\n",i+1,feature_means[i],feature_variances[i],sqrt(feature_variances[i]));
               //cout << feature_means[i] << "\t" << sqrt(feature_variances[i]) << endl;
           }
         }
@@ -403,7 +404,7 @@ double calculate_accuracy_of_test_set(
 
        // Classify
        if(verbose) cout << "\nClassifying:" << endl;
-       if(verbose) cout << "class\tprediction\tresult" << endl;
+       if(verbose) cout << "class\tlog_posterior_numer\tresult" << endl;
        int correct = 0;
        int total = 0;
 
@@ -412,8 +413,7 @@ double calculate_accuracy_of_test_set(
              int label = (*row).first;
              //row.second is the vector containing valuse of this row (label)
 
-             int predlabel = 0;
-             double maxlikelihood = 0.0;
+
 
              /*
              //for NB-2
@@ -422,10 +422,13 @@ double calculate_accuracy_of_test_set(
              int second_best_label = -1;
              int third_best_label = -1;
              */
+
+             int predlabel = 0;
+             double maxlikelihood = -DBL_MAX;
              //double denom = 0.0;
              vector<double> probs;
              for(auto it = priors.begin(); it != priors.end(); it++){
-                 double numer = priors[it->first];
+                 double numer = log(priors[it->first]);
                  for(unsigned int j = 0; j < (*row).second.size(); j++){
                      switch(decision){
                          case 2:
@@ -440,14 +443,14 @@ double calculate_accuracy_of_test_set(
                              break;
                          default:
                              // Gaussian
-                             numer *= (1/sqrt(2*M_PI*variances[it->first][j])*exp((-1*((*row).second[j]-means[it->first][j])*((*row).second[j]-means[it->first][j]))/(2*variances[it->first][j])));
+                             numer += log((1/sqrt(2*M_PI*variances[it->first][j])*exp((-1*((*row).second[j]-means[it->first][j])*((*row).second[j]-means[it->first][j]))/(2*variances[it->first][j]))));
                              break;
                      }
                  }
 
                  if(verbose){
                      char pred_l = char(it->first);
-                     cout << pred_l << ":" << numer << endl;
+                     cout << pred_l << ":\t" << numer << endl;
                  }
 
                  if(numer > maxlikelihood){
@@ -469,7 +472,7 @@ double calculate_accuracy_of_test_set(
                      }
                  }
                  */
-                 
+
                  //denom += numer;
 
 
