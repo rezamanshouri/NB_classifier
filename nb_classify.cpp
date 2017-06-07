@@ -109,8 +109,9 @@ int main(int argc, const char* argv[]){
             break;
     }
     cout << "# K in K-fold CV:   " << k << endl;
-    cout << "# alpha param:   " << alpha << endl;
-    cout << "# training data: " << argv[argc-1] << endl << endl;
+    //cout << "# alpha param:   " << alpha << endl;
+    //cout << "# training data: " << argv[argc-1] << endl << endl;
+    cout << endl;
 
 
     //set precision for doubles in cout in the "whole" program
@@ -179,6 +180,7 @@ int main(int argc, const char* argv[]){
         errors_in_k_fold_CV.push_back(1-accuracy);
 
         /*
+        //manual clean up
         training_data_summary.clear();
         label_counts.clear();
         priors.clear();
@@ -198,8 +200,8 @@ int main(int argc, const char* argv[]){
       double mean = 0.0;
       double range = 0.0;
       calculate_confidence_interval(errors_in_k_fold_CV, mean, range);
-      cout << "\n\nCI for errors: \ncenter:" << mean << "\nrange: " << range << endl;
-      cout << "(" << mean-range << "," << mean+range << ")" << endl;
+      cout << setprecision(2) << "\n\nCI of Errors: \n(" << 100*(mean-range) << "," << 100*(mean+range) << ")" << endl;
+      cout << setprecision(2) << "center:" << mean*100 << "\nrange: " << range*100 << endl;
 
 
 
@@ -412,6 +414,14 @@ double calculate_accuracy_of_test_set(
 
              int predlabel = 0;
              double maxlikelihood = 0.0;
+
+             /*
+             //for NB-2
+             double second_best_likelihood = 0.0;
+             double third_best_likelihood = 0.0;
+             int second_best_label = -1;
+             int third_best_label = -1;
+             */
              //double denom = 0.0;
              vector<double> probs;
              for(auto it = priors.begin(); it != priors.end(); it++){
@@ -444,7 +454,26 @@ double calculate_accuracy_of_test_set(
                      maxlikelihood = numer;
                      predlabel = it->first;
                  }
+                 /*
+                //for NB-2
+                 else {
+                     //keep track of 2nd and 3rd best
+                     if(numer > second_best_likelihood) {
+                       second_best_likelihood = numer;
+                       second_best_label = it->first;
+                     }else {
+                         if(numer > third_best_likelihood) {
+                           third_best_likelihood = numer;
+                           third_best_label = it->first;
+                         }
+                     }
+                 }
+                 */
+                 
                  //denom += numer;
+
+
+
                  probs.push_back(numer);
              }
              //for(unsigned int j = 0; j < probs.size(); j++){
@@ -459,10 +488,29 @@ double calculate_accuracy_of_test_set(
              }
 
 
+            /*
+            //random classifier
+            //labels with 0 frequencies are excluded
+            std::vector<char>  all_labels {'J', 'A', 'K', 'L', 'D', 'V', 'T', 'M', 'N', 'U', 'O', 'C', 'G', 'E', 'F', 'H', 'I', 'P', 'Q'};
+            int l = all_labels.size();
+            int random_label = all_labels[rand()%l];
+            predlabel = int(random_label);
+            */
+
              if(predlabel == label){
                  if(verbose) cout << "\tcorrect" << endl << endl;
                  correct++;
-             }else{
+             /*
+             //pick top three choices in NB
+             }else if(second_best_label == label) {
+                 if(verbose) cout << "\tcorrect - 2" << endl << endl;
+                 correct++;
+             }else if (third_best_label == label){
+                 if(verbose) cout << "\tcorrect - 3" << endl << endl;
+                 correct++;
+             */
+             }
+             else{
                  if(verbose) cout << "\tincorrect" << endl << endl;
              }
 
