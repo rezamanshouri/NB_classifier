@@ -256,7 +256,10 @@ void read_data_from_file(const char* file_name, vector<pair<int,vector<double> >
 
                 vector<double> values;
                 for(unsigned int i = 1; i < tokens.size(); i++){  //extract feature i's value for this row
-                    values.push_back(atof(tokens[i].c_str()));
+                    double val = atof(tokens[i].c_str());
+                    //values.push_back(val);  //raw values
+                    values.push_back( (val==0.0)? 0.1 : val*val );  //consider square values
+                    //values.push_back( abs(val) );  //consider absolute values
                 }
 
                 pair<int,vector<double> > row;
@@ -404,7 +407,7 @@ double calculate_accuracy_of_test_set(
 
        // Classify
        if(verbose) cout << "\nClassifying:" << endl;
-       if(verbose) cout << "class\tlog_posterior_numer\tresult" << endl;
+       if(verbose) cout << "class\tlog_posterior_numer" << endl;
        int correct = 0;
        int total = 0;
 
@@ -428,6 +431,7 @@ double calculate_accuracy_of_test_set(
              //double denom = 0.0;
              vector<double> probs;
              for(auto it = priors.begin(); it != priors.end(); it++){
+                 //double numer = priors[it->first];
                  double numer = log(priors[it->first]);
                  for(unsigned int j = 0; j < (*row).second.size(); j++){
                      switch(decision){
@@ -443,14 +447,17 @@ double calculate_accuracy_of_test_set(
                              break;
                          default:
                              // Gaussian
-                             numer += log((1/sqrt(2*M_PI*variances[it->first][j])*exp((-1*((*row).second[j]-means[it->first][j])*((*row).second[j]-means[it->first][j]))/(2*variances[it->first][j]))));
+                             //numer *= (1/sqrt(2*M_PI*variances[it->first][j]))*exp((-1*((*row).second[j]-means[it->first][j])*((*row).second[j]-means[it->first][j]))/(2*variances[it->first][j]));
+                             //numer += log( (1/sqrt(2*M_PI*variances[it->first][j]))*exp((-1*((*row).second[j]-means[it->first][j])*((*row).second[j]-means[it->first][j]))/(2*variances[it->first][j])) );  //normal distribution
+                             numer += log( (1/sqrt(2*M_PI*(*row).second[j]))*exp(-1*((*row).second[j]/2)) );  //for squares: chi-square distribution
+                             //numer += log( (1/sqrt(2*M_PI*variances[it->first][j]))*exp((-1*((*row).second[j]-means[it->first][j])*((*row).second[j]-means[it->first][j]))/(2*variances[it->first][j])) + (1/sqrt(2*M_PI*variances[it->first][j]))*exp((-1*((*row).second[j]+means[it->first][j])*((*row).second[j]-means[it->first][j]))/(2*variances[it->first][j])));  //folded distribution
                              break;
                      }
                  }
 
                  if(verbose){
-                     char pred_l = char(it->first);
-                     cout << pred_l << ":\t" << numer << endl;
+                     char current_label = char(it->first);
+                     cout << current_label << ":\t" << numer << endl;
                  }
 
                  if(numer > maxlikelihood){
@@ -487,7 +494,7 @@ double calculate_accuracy_of_test_set(
              if(verbose){
                char pred_l = char(predlabel);
                char lbl = char(label);
-               cout << lbl << "\t" << pred_l << "\t";
+               cout << "label: " << lbl << "\tpredictaed_label:" << pred_l << "\t";
              }
 
 
